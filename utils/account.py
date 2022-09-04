@@ -34,7 +34,7 @@ class Account :
         self._decode(account)
 
 
-        logging.info(f"- successfully added account keys")
+        logging.info(f"successfully added account keys")
 
     def _decode(self ,ls_account):
         
