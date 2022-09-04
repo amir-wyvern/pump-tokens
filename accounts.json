@@ -1,6 +1,6 @@
 [
     {   
         "public" :"public address" ,
-        "private":"private key (encrypt AES)"
+        "private":"private key (encrypt with AES | use file encryptPrivateKey.py )" 
     }
 ]
