@@ -1,10 +1,5 @@
-from web3._utils.contracts import prepare_transaction ,find_matching_fn_abi
 from web3.middleware import geth_poa_middleware
-from eth_abi.packed import encode_abi_packed
-from eth_abi import encode_abi
 from web3 import Web3
-import eth_abi
-
 from time import time 
 import logging
 
