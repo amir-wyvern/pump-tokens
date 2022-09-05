@@ -140,8 +140,8 @@ contract BEP20Token is Context, IBEP20, Ownable {
   string private _name;
 
   constructor() public {
-    _name = "VivaKill";
-    _symbol = "VVK";
+    _name = "wyvern";
+    _symbol = "wyn";
     _decimals = 8;
     _totalSupply = 100000000000000000; //1,000,000 Tokens
     _releaseTime = 0; // time for release
