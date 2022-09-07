@@ -1,5 +1,5 @@
 from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.client.write_api import ASYNCHRONOUS
 from concurrent.futures import ThreadPoolExecutor
 from web3.middleware import geth_poa_middleware
 from utils.contracts import load_contracs
@@ -11,7 +11,7 @@ import os
 
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(asctime)-24s] [%(levelname)-8s] [%(lineno)-3d -%(name)-7s] | %(message)s',
+    format='[%(asctime)-24s|%(levelname)-8s|%(lineno)-3d-%(name)s] > %(message)s',
     handlers=[
     logging.FileHandler("offlineScraper.log"),
     logging.StreamHandler()
@@ -57,52 +57,87 @@ class CONST :
 
 class Influx:
 
-    def __init__(self, token: str, org: str, bucket: str, url: str):
+    def __init__(self, token: str, org: str, bucket: str, url: str, pool_size: int):
 
         self.org = org
         self.bucket = bucket
         self.url = url
 
-        __influx = InfluxDBClient(url= self.url, token= token, org= self.org)
-        self.__writeApi = __influx.write_api(write_options= SYNCHRONOUS)
+        __influx = InfluxDBClient(url= self.url, token= token, org= self.org, pool_size= pool_size)
+        self.__writeApi = __influx.write_api(write_options= ASYNCHRONOUS)
 
     def swap(self, timestamp, contract, sender, sawpType, value):
         
+        logging.info(
+            'swap      (constract:{0} |sender:{1} |time:{2} |value:{3} |sawpType:{4}'.format(
+                contract,
+                sender,
+                timestamp,
+                value,
+                sawpType
+            )
+        )
+
         point = Point("swap") \
         .tag("swapType", sawpType) \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("value",value) \
+        .field("amount",value) \
         .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
     def created(self, timestamp, contract, sender, value):
         
+        logging.info(
+            'created   (constract:{0} |sender:{1} |time:{2} |value:{3}'.format(
+                contract,
+                sender,
+                timestamp,
+                value
+            )
+        )
+
         point = Point("created") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("value",value) \
+        .field("amount",value) \
         .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
     def addLiqudity(self, timestamp, contract, sender, value):
         
+        logging.info(
+            'addLiq    (constract:{0} |sender:{1} |time:{2} |value:{3}'.format(
+                contract,
+                sender,
+                timestamp,
+                value
+            )
+        )
         point = Point("addLiqudity") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("value",value) \
+        .field("amount",value) \
         .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
     def removeLiqudity(self, timestamp, contract, sender, value):
 
+        logging.info(
+            'removeLiq (constract:{0} |sender:{1} |time:{2} |value:{3}'.format(
+                contract,
+                sender,
+                timestamp,
+                value
+            )
+        )
         point = Point("removeLiqudity") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("value",value) \
+        .field("amount",value) \
         .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
@@ -181,7 +216,6 @@ class ScrapeNetwork:
                 transferedValue = round(transferedValue / 10**18 ,5) 
                 sender = tx['from']
 
-                logging.info(f'swap : {contractAddress} |sender : {sender} |value : {transferedValue} | time {timestamp} ')
                 self.influxObj.swap(
                     timestamp= timestamp,
                     contract= contractAddress,
@@ -196,8 +230,6 @@ class ScrapeNetwork:
                 contractAddress = decodeInput[1]['token']
                 transferedValue = round(tx['value']/10**18, 5)
                 sender = tx['from']
-
-                logging.info(f'>find a token : {contractAddress} |sender : {sender} |value : {transferedValue} | time {timestamp} ')
 
                 self.influxObj.addLiqudity(
                     timestamp= timestamp,
@@ -214,7 +246,6 @@ class ScrapeNetwork:
                 transferedValue = round(transferedValue/10**18, 5)
                 sender = tx['from']
 
-                logging.info(f'remove : {contractAddress} |sender : {sender} |value : {transferedValue} | time {timestamp} ')
                 self.influxObj.removeLiqudity(
                     timestamp= timestamp,
                     contract= contractAddress,
@@ -236,7 +267,6 @@ class ScrapeNetwork:
                     transferedValue = tx['value']
                     transferedValue = round(transferedValue/10**18, 5)
 
-                    logging.info(f'created : {contractAddress} |sender : {sender} |value : {transferedValue} | time {timestamp} ')
                     self.influxObj.created(
                         timestamp= timestamp,
                         contract= contractAddress,
@@ -261,16 +291,17 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    token = os.getenv('INFLUX_TOKEN')
     org = ''
     bucket = ''
     url = ''
+    token = os.getenv('INFLUX_TOKEN')
 
-    influxObj = Influx(token, org, bucket, url)
     startBlock = 0
-    lastBlack = 9999
+    lastBlock = 0
     workers = 10
-    ScrapeNetwork(influxObj,startBlock, lastBlock ,workers).start()
+
+    influxObj = Influx(token, org, bucket, url, pool_size= workers + 5)
+    ScrapeNetwork(influxObj, startBlock, lastBlock, workers).start()
 
 
 
