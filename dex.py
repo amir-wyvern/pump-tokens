@@ -217,7 +217,7 @@ class DexTrade :
                 output_token_amount, 
                 [input_token_address,output_token_address],
                 Web3.toChecksumAddress(self.account_keys.public_key),
-                self.get_deadLine()
+                int(self.get_deadLine())
             ).buildTransaction({
                 'from': Web3.toChecksumAddress(self.account_keys.public_key),
                 'gasPrice': gas_price,
