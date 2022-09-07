@@ -1,7 +1,7 @@
 from utils.contracts import load_contracs
 from utils.account import Account
+from utils.dex import DexTrade
 from dotenv import load_dotenv
-from dex import DexTrade
 import logging
 import os
 
@@ -17,8 +17,8 @@ logging.basicConfig(
 
 if __name__ == '__main__':
 
-    tokenA_address = ''
-    tokenB_address = ''
+    tokenB_address = '' # busd
+    tokenA_address = '' # wbnb
     amount = 0
 
     load_dotenv()
@@ -35,8 +35,11 @@ if __name__ == '__main__':
         tokenB_address= tokenB_address,
         factory_contract= list_contracts['pancake-factory'],
         router_contract= list_contracts['router'],
-        pair_abi= list_contracts['pancake-pair']['abi']
+        pair_abi= list_contracts['pancake-pair']['abi'],
+        slippage=49
         )
+
+    # dex.check_approve(token_address, amount)
 
     # dex.get_tokenA_price()
     # dex.get_tokenB_price()
