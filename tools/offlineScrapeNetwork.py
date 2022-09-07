@@ -47,7 +47,7 @@ class ScrapeNetwork :
         data = data[10:]
         address_found = set()
         for arg_index in range(len(data)//64):
-            arg = len(hex(int(data[arg_index*64:(arg_index+1)*64], 16)))
+            arg = hex(int(data[arg_index*64:(arg_index+1)*64], 16))
             if len(arg) == 42:
                 address_found.add(arg)
             
