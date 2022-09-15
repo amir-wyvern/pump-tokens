@@ -78,12 +78,12 @@ class Influx:
             )
         )
 
-        point = Point("swap-v2") \
+        point = Point("swap") \
         .tag("swapType", sawpType) \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("amount",value) 
-        # .time(datetime.utcfromtimestamp(timestamp), write_precision=WritePrecision.S)
+        .field("amount",value) \
+        .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
@@ -98,11 +98,12 @@ class Influx:
             )
         )
 
-        point = Point("created-v2") \
+        point = Point("created") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
         .field("amount",value) \
-        .time(datetime.utcfromtimestamp(timestamp), write_precision=WritePrecision.S)
+        .time(datetime.utcfromtimestamp(int(timestamp)))
+
         self.__writeApi.write(self.bucket, self.org, point)
 
     def addLiqudity(self, timestamp, contract, sender, value):
@@ -115,11 +116,11 @@ class Influx:
                 value
             )
         )
-        point = Point("addLiqudity-v2") \
+        point = Point("addLiqudity") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
-        .field("amount",value) 
-        # .time(datetime.utcfromtimestamp(timestamp), write_precision=WritePrecision.S)
+        .field("amount",value) \
+        .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
@@ -133,11 +134,11 @@ class Influx:
                 value
             )
         )
-        point = Point("removeLiqudity-v2") \
+        point = Point("removeLiqudity") \
         .tag("contractAddress", contract) \
         .tag("sender", sender) \
         .field("amount",value) \
-        # .time(datetime.utcfromtimestamp(timestamp), write_precision=WritePrecision.S)
+        .time(datetime.utcfromtimestamp(int(timestamp)))
 
         self.__writeApi.write(self.bucket, self.org, point)
 
@@ -183,7 +184,6 @@ class ScrapeNetwork:
         self.lastBlock = lastBlock
         self.influxObj = influxObj
         self.executor = ThreadPoolExecutor(max_workers= worker)
-        from time import time
 
     def start(self):
 
@@ -202,81 +202,79 @@ class ScrapeNetwork:
     def checkInputDataType(self, txs, timestamp):
 
         for tx in txs:
-            try :
-                if tx['input'][:10] in CONST.SWAP_FUNC_HASH and \
-                (contractAddresses := set( (decodeInput := routerContract.decode_function_input(tx['input']) )[1]['path'] ) & contractCache) :
 
-                    for _ in range(len(contractAddresses)):
-                        contractAddress = contractAddresses.pop()
+            if tx['input'][:10] in CONST.SWAP_FUNC_HASH and \
+               (contractAddresses := set( (decodeInput := routerContract.decode_function_input(tx['input']) )[1]['path'] ) & contractCache) :
 
-                    nameFunction = decodeInput[0].fn_name
-                    transferedValue, sawpType = getattr(
-                        FindTrasnferedValueInSwap,
-                        nameFunction)(tx['value'], decodeInput[1])
-                        
-                    transferedValue = round(transferedValue / 10**18 ,5) 
-                    sender = tx['from']
+                for _ in range(len(contractAddresses)):
+                    contractAddress = contractAddresses.pop()
 
-                    self.influxObj.swap(
-                        timestamp= timestamp,
-                        contract= contractAddress,
-                        sender= sender,
-                        sawpType= sawpType,
-                        value= transferedValue
-                        )
-
-                elif tx['input'][:10] in CONST.ADDLIQ_FUNC_HASH and \
-                    ( decodeInput := routerContract.decode_function_input(tx['input']) )[1]['token'] in contractCache:
+                nameFunction = decodeInput[0].fn_name
+                transferedValue, sawpType = getattr(
+                    FindTrasnferedValueInSwap,
+                    nameFunction)(tx['value'], decodeInput[1])
                     
-                    contractAddress = decodeInput[1]['token']
-                    transferedValue = round(tx['value']/10**18, 5)
+                transferedValue = round(transferedValue / 10**18 ,5) 
+                sender = tx['from']
+
+                self.influxObj.swap(
+                    timestamp= timestamp,
+                    contract= contractAddress,
+                    sender= sender,
+                    sawpType= sawpType,
+                    value= transferedValue
+                    )
+
+            elif tx['input'][:10] in CONST.ADDLIQ_FUNC_HASH and \
+                ( decodeInput := routerContract.decode_function_input(tx['input']) )[1]['token'] in contractCache:
+                
+                contractAddress = decodeInput[1]['token']
+                transferedValue = round(tx['value']/10**18, 5)
+                sender = tx['from']
+
+                self.influxObj.addLiqudity(
+                    timestamp= timestamp,
+                    contract= contractAddress,
+                    sender= sender,
+                    value= transferedValue
+                    )
+
+            elif tx['input'][:10] in CONST.REMOVE_FUNC_HASH and \
+                (decodeInput := routerContract.decode_function_input(tx['input']) )[1]['token'] in contractCache :
+                
+                contractAddress = decodeInput[1]['token']
+                transferedValue = decodeInput[1]['amountETHMin']
+                transferedValue = round(transferedValue/10**18, 5)
+                sender = tx['from']
+
+                self.influxObj.removeLiqudity(
+                    timestamp= timestamp,
+                    contract= contractAddress,
+                    sender= sender,
+                    value= transferedValue
+                    )
+
+            elif tx['input'][:10] in CONST.CREATE_FUNC_HASH :
+                
+                txData = w3.eth.get_transaction_receipt(tx['hash'].hex())
+                topicLogs = set([log['topics'][0].hex() for log in txData['logs']])
+                
+                if topicLogs and not(CONST.TOPICS - topicLogs):
+
+                    contractAddress = txData['contractAddress']
+                    contractCache.add(contractAddress)
+
                     sender = tx['from']
-
-                    self.influxObj.addLiqudity(
-                        timestamp= timestamp,
-                        contract= contractAddress,
-                        sender= sender,
-                        value= transferedValue
-                        )
-
-                elif tx['input'][:10] in CONST.REMOVE_FUNC_HASH and \
-                    (decodeInput := routerContract.decode_function_input(tx['input']) )[1]['token'] in contractCache :
-                    
-                    contractAddress = decodeInput[1]['token']
-                    transferedValue = decodeInput[1]['amountETHMin']
+                    transferedValue = tx['value']
                     transferedValue = round(transferedValue/10**18, 5)
-                    sender = tx['from']
 
-                    self.influxObj.removeLiqudity(
+                    self.influxObj.created(
                         timestamp= timestamp,
                         contract= contractAddress,
                         sender= sender,
                         value= transferedValue
                         )
 
-                elif tx['input'][:10] in CONST.CREATE_FUNC_HASH :
-                    
-                    txData = w3.eth.get_transaction_receipt(tx['hash'].hex())
-                    topicLogs = set([log['topics'][0].hex() for log in txData['logs']])
-                    
-                    if topicLogs and not(CONST.TOPICS - topicLogs):
-
-                        contractAddress = txData['contractAddress']
-                        contractCache.add(contractAddress)
-
-                        sender = tx['from']
-                        transferedValue = tx['value']
-                        transferedValue = round(transferedValue/10**18, 5)
-
-                        self.influxObj.created(
-                            timestamp= timestamp,
-                            contract= contractAddress,
-                            sender= sender,
-                            value= transferedValue
-                            )
-            except Exception as e:
-
-                logging.error(f'error {e}')
 
 
 if __name__ == '__main__':
@@ -305,3 +303,8 @@ if __name__ == '__main__':
 
     influxObj = Influx(token, org, bucket, url, pool_size= workers + 5)
     ScrapeNetwork(influxObj, startBlock, lastBlock, workers).start()
+
+
+
+
+
