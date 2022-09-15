@@ -194,8 +194,9 @@ class ScrapeNetwork:
             self.checkInputDataType(blockTx['transactions'], blockTx['timestamp'])
 
     def getBlocks(self, blockNumber):
-        
+        print('>',blockNumber)
         blockTxs = w3.eth.get_block(blockNumber, full_transactions= True)
+        print('<',blockNumber)
         return blockTxs
 
     def checkInputDataType(self, txs, timestamp):
@@ -293,13 +294,13 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    org = ''
-    bucket = ''
-    url = ''
+    org = 'org'
+    bucket = 'BSC_Scraping'
+    url = 'http://localhost:8086'
     token = os.getenv('INFLUX_TOKEN')
 
-    startBlock = 0
-    lastBlock = 0
+    startBlock = 21061407
+    lastBlock = 21161407
     workers = 10
 
     influxObj = Influx(token, org, bucket, url, pool_size= workers + 5)
