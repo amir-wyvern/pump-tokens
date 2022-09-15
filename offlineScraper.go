@@ -16,9 +16,10 @@ import (
     "github.com/ethereum/go-ethereum/ethclient"
     "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+
 )
 
-var TOPICS = [1]common.Hash{common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")}
+// var TOPICS [] 
 var CACHE = map[common.Address]bool {}
 var CLIENT, _ = ethclient.Dial("https://bsc-dataseed.binance.org")
 
@@ -100,18 +101,7 @@ func isContainCacheAddress(listAddress []common.Address) bool {
     }
     return false
 }
-func isContainTopicsHash(logs []*types.Log) bool {
-    for _, log := range logs {
-        for _, topic := range log.Topics {
-            for _, hash := range TOPICS {
-                if hash == topic {
-                    return true
-                }
-            }
-        }
-    }
-    return false 
-}
+
 func analyzeTx(tx *types.Transaction) {
 
     key4Byte := [4]byte{tx.Data()[0], tx.Data()[1], tx.Data()[2], tx.Data()[3]} 
@@ -122,34 +112,37 @@ func analyzeTx(tx *types.Transaction) {
         value, _ := CREATE[key4Byte].(func(*big.Int,map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
         from, _ := types.Sender(types.NewEIP155Signer(tx.ChainId()), tx) 
         receipt, _ := CLIENT.TransactionReceipt(context.Background(), tx.Hash())
-        if isContainTopicsHash(receipt.Logs) {
-            fmt.Println("=CRAETE : " ,receipt.ContractAddress ,from ,value) 
-            CACHE[receipt.ContractAddress] = true
-        }
+        CACHE[receipt.ContractAddress] = true
+
+        fmt.Println("=CRAETE : " ,receipt.ContractAddress , tx.Hash().Hex(),from ,value)
+        fmt.Println("=CRAETE : " ,receipt.Logs)
+        fmt.Printf("=CRAETE : %T" ,receipt.Logs)
+        // fmt.Printf("%T\n" , tx.From())
 
     } else if ADD_LIQ[key4Byte] != nil {
         
         inputABI := DecodeTransactionInputData(CONTRACT_ABI, tx.Data())
         if CACHE[inputABI["token"].(common.Address)] {
-            value, _ := ADD_LIQ[key4Byte].(func(*big.Int, map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
-            fmt.Println("ADD_LIQ : " , inputABI["token"] ,value)
+            value, _ := ADD_LIQ[key4Byte].(func(*big.Int,map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
+            fmt.Println("ADD_LIQ : " , inputABI ,value)
+            fmt.Printf("ADD %T" ,inputABI["token"] )
         }
     } else if SWAP[key4Byte] != nil {
 
         inputABI := DecodeTransactionInputData(CONTRACT_ABI, tx.Data()) 
         if isContainCacheAddress(inputABI["path"].([]common.Address) ) {
-            value, _ := SWAP[key4Byte].(func(*big.Int, map[string]interface{})(*big.Int,string))(tx.Value(), inputABI)
-            fmt.Println("SWAP : " , inputABI["token"] ,value)
+            SWAP[key4Byte].(func(*big.Int,map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
         }
 
     } else if REMOVE_LIQ[key4Byte] != nil {
         
         inputABI := DecodeTransactionInputData(CONTRACT_ABI, tx.Data())
         if CACHE[inputABI["token"].(common.Address)] {
-            value, _ := REMOVE_LIQ[key4Byte].(func(*big.Int, map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
-            fmt.Println("REMOVE_LIQ : " , inputABI["token"] ,value)
+            value, _ := REMOVE_LIQ[key4Byte].(func(*big.Int,map[string]interface{})(*big.Int,string))(tx.Value(), inputABI) 
+            fmt.Println("REMOVE_LIQ : " , value)
         }
     }
+
 }
 
 func getBlockNumber(number int) {
@@ -187,8 +180,6 @@ func spinupWorker(count int, pipeline <-chan int, wg *sync.WaitGroup) {
 
 func main() {
 
-    // fmt.Printf( "%T",common.HexToHash("0xf305d719"))
-    // fmt.Println( common.HexToHash("0xf305d719"))
     start := time.Now()
     
     wg := &sync.WaitGroup{}
@@ -205,4 +196,4 @@ func main() {
     elapsed := time.Since(start)
     fmt.Printf("Binomial took %s", elapsed)
 
-}s
+}
